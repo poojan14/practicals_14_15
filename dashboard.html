@@ -63,184 +63,295 @@ dialog::backdrop{background:rgba(0,0,0,.35)}
 .mono{font-family:var(--mono)}
 .toast{position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:var(--ink); color:var(--bg); padding:8px 16px; border-radius:8px; opacity:0; transition:opacity .2s; pointer-events:none; z-index:50}
 .toast.show{opacity:1}
+.stats{display:flex; flex-wrap:wrap; gap:28px; margin:0 0 18px}
+.stats b{display:block; font-family:var(--serif); font-size:32px; color:var(--blue); line-height:1.1}
+.stats span{font-size:14px; color:var(--ink-2)}
+.tools{display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:0 0 14px}
+.link{color:var(--blue); text-decoration:underline; cursor:pointer; background:none; border:0; padding:0; font:inherit; text-align:left}
+td.wrapcell{white-space:normal}
+.sub{font-size:12.5px; color:var(--muted)}
+tbody tr{cursor:default}
+.mark{font-family:var(--mono)}
+.dimc{color:var(--muted)}
 </style>
 </head>
 <body>
-<header class="top"><h1>DIP Practicals 14&ndash;15 &middot; Teacher dashboard</h1><span class="who" id="who"></span><span id="topBtns"></span></header>
+<header class="top"><h1>DIP Practicals 14&ndash;15 &middot; Class dashboard</h1><span class="who" id="who"></span><span id="topBtns"></span><a class="btn ghost sm" href="./" target="_blank" rel="noopener">Open site</a></header>
 <main id="main"><p class="muted">Loading…</p></main>
 <dialog id="dlg"></dialog>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script src="config.js"></script>
 <script type="module">
 const V="10.12.2";
+const P=window.COLLECTION_PREFIX||"dip_";
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const toast=m=>{ const t=$("#toast"); t.textContent=m; t.classList.add("show"); clearTimeout(toast.t); toast.t=setTimeout(()=>t.classList.remove("show"),2000); };
-const PRACS=["14A","14B","14C","15A","15B"];
-const TASK_OF={ "14A":"t14a","14B":"t14b","14C":"t14c","15A":"t15a","15B":"t15b" };
-const STEP_TOTAL={ "14A":10,"14B":7,"14C":7,"15A":7,"15B":11 };
-const LABELS={ t14a:"14A extra task", t14b:"14B extra task", t14c:"14C extra task", t15a:"15A extra task", t15b:"15B extra task", exit:"Exit quiz" };
-const cfg=window.FIREBASE_CONFIG||{};
+const toast=m=>{ const t=$("#toast"); t.textContent=m; t.classList.add("show"); clearTimeout(toast.t); toast.t=setTimeout(()=>t.classList.remove("show"),2400); };
+const GR=Object.assign({maxAttempts:4, penalty:0.25}, window.GRADING||{});
+
+/* Question text (no answers) copied from index.html */
+const DET=[["prewitt","Prewitt"],["sobel","Sobel"],["roberts","Roberts"],["laplacian","Laplacian"],["canny","Canny"]];
+const TASKS={
+ t14a:{p:"14A", title:"Edge detection on edge.jpeg", lang:"MATLAB", script:"exp14a.m", sec:"a-steps",
+  files:[["edge.jpeg","Crane and metro viaduct, colour photo"]],
+  qs:[{id:"rows",type:"num",label:"size(I): number of rows in edge.jpeg"},
+      {id:"cols",type:"num",label:"size(I): number of columns"},
+      {id:"ch",type:"num",label:"size(I): number of channels (before rgb2gray)"},
+      {id:"prewitt",type:"num",label:"Prewitt: number of edge pixels, nnz(BW_prewitt)"},
+      {id:"sobel",type:"num",label:"Sobel: number of edge pixels, nnz(BW_sobel)"},
+      {id:"roberts",type:"num",label:"Roberts: number of edge pixels, nnz(BW_roberts)"},
+      {id:"lap",type:"num",label:"Laplacian (zero crossings): number of edge pixels, nnz(BW_lap)"},
+      {id:"canny",type:"num",label:"Canny: number of edge pixels, nnz(BW_canny)"},
+      {id:"most",type:"choice",label:"Which detector marked the MOST edge pixels?",opts:DET},
+      {id:"fewest",type:"choice",label:"Which detector marked the FEWEST edge pixels?",opts:DET},
+      {id:"sky",type:"choice",label:"Look at the cloudy sky in your Laplacian result. What do you see?",opts:[["noise","Many small, scattered edge pixels"],["blank","No edge pixels at all"],["outline","Only the outline of the crane"],["white","The whole sky turns white"]]}]},
+ t14b:{p:"14B", title:"Erosion on d1.jpeg", lang:"MATLAB", script:"exp14b.m", sec:"b-steps",
+  files:[["d1.jpeg","Chip with pins and thin wires"]],
+  qs:[{id:"n0",type:"num",label:"nnz(I) for the original image"},
+      {id:"e3",type:"num",label:"nnz(E1) after erosion with strel('square', 3)"},
+      {id:"e7",type:"num",label:"nnz(E2) after erosion with strel('square', 7)"},
+      {id:"e11",type:"num",label:"nnz(E3) after erosion with strel('square', 11)"},
+      {id:"why",type:"choice",label:"d1.jpeg is 300 x 300, yet nnz(I) is much larger than 90,000. Why?",opts:[["ch","I is a colour image, so nnz counts non-zero values in all 3 channels"],["jpeg","JPEG compression adds extra pixels"],["edge","nnz counts edge pixels twice"],["bug","It is a MATLAB error"]]},
+      {id:"trend",type:"choice",label:"As the square SE grows from 3 to 7 to 11, the nnz count…",opts:[["down","decreases"],["up","increases"],["same","stays the same"]]},
+      {id:"wires3",type:"choice",label:"With the 3x3 SE, what happens to the thin diagonal wires?",opts:[["most","Most of them disappear; only the thicker wires remain"],["thick","They become thicker"],["none","Nothing changes"],["pins","The wires stay but the pins disappear"]]},
+      {id:"allw",type:"choice",label:"Which SE size is the first to remove ALL the wires, while the pins and centre square remain?",opts:[["3","3x3"],["7","7x7"],["11","11x11"],["no","None of them"]]}]},
+ t14c:{p:"14C", title:"Dilation on cameraman.jpeg", lang:"MATLAB", script:"exp14c.m", sec:"d-steps",
+  files:[["cameraman.jpeg","The cameraman photo"]],
+  qs:[{id:"inv",type:"choice",label:"Why does the program use ~ in BW = ~im2bw(I, graythresh(I))?",opts:[["obj","im2bw makes the dark cameraman black; ~ makes him the white object that imdilate grows"],["noise","To remove noise"],["fast","To make imdilate faster"],["size","To change the image size"]]},
+      {id:"bw",type:"num",label:"nnz(BW): white pixels in the binary image"},
+      {id:"d3",type:"num",label:"nnz(D1) after dilation with strel('square', 3)"},
+      {id:"d7",type:"num",label:"nnz(D2) after dilation with strel('square', 7)"},
+      {id:"d11",type:"num",label:"nnz(D3) after dilation with strel('square', 11)"},
+      {id:"trend",type:"choice",label:"As the square SE grows from 3 to 7 to 11, the white-pixel count…",opts:[["up","increases"],["down","decreases"],["same","stays the same"]]},
+      {id:"tripod",type:"choice",label:"With the 11x11 SE, what happens to the thin tripod legs?",opts:[["thick","They become thick and merge into a solid shape"],["gone","They disappear"],["same","They stay thin"],["black","They turn black"]]}]},
+ t15a:{p:"15A", title:"Opening on d1.jpeg", lang:"MATLAB", script:"exp15a.m", sec:"e-steps",
+  files:[["d1.jpeg","Chip with pins and thin wires"]],
+  qs:[{id:"level",type:"choice",label:"BW1 = im2bw(A) has no level. Which threshold does MATLAB use?",opts:[["half","0.5 (pixels brighter than half of 255 become white)"],["otsu","Otsu's level, the same as graythresh"],["zero","0: every non-black pixel becomes white"],["mean","The mean brightness of the image"]]},
+      {id:"bw",type:"num",label:"nnz(BW1): white pixels in the binary image"},
+      {id:"o2",type:"num",label:"nnz(O1) after opening with strel('disk', 2, 0)"},
+      {id:"o10",type:"num",label:"nnz(O2) after opening with strel('disk', 10, 0)"},
+      {id:"r2",type:"choice",label:"What did opening with the disk of radius 2 remove?",opts:[["thin","Only the thinnest wires; a few thicker wires remain"],["all","All the wires"],["pins","The pins"],["nothing","Nothing visible"]]},
+      {id:"r10",type:"choice",label:"What did opening with the disk of radius 10 remove?",opts:[["wires","All the wires; the pins and centre square stay"],["pins","The wires and all the pins"],["die","The centre square"],["nothing","Nothing visible"]]},
+      {id:"keep",type:"choice",label:"Why do the pins keep almost their original size after opening, even though opening starts with erosion?",opts:[["grow","The dilation step grows back what the erosion shrank"],["never","Opening never changes large objects"],["disk","Because the SE is a disk"],["bw","Because im2bw was used first"]]}]},
+ t15b:{p:"15B", title:"OpenCV on house.png", lang:"Python", script:"exp15b.py", sec:"f-steps",
+  files:[["house.png","The house image, 512 x 512"]],
+  qs:[{id:"h",type:"num",label:"img.shape: height"},{id:"w",type:"num",label:"img.shape: width"},{id:"c",type:"num",label:"img.shape: channels"},
+      {id:"peak",type:"num",label:"Index of the tallest histogram bin of the gray image, hist.argmax()"},
+      {id:"canny",type:"num",label:"cv2.Canny(gray, 100, 200): number of edge pixels, np.count_nonzero(edges)"},
+      {id:"thr",type:"num",label:"cv2.threshold(gray, 127, 255, THRESH_BINARY): number of white pixels"},
+      {id:"eq",type:"choice",label:"Compare the histograms before and after cv2.equalizeHist. What changed?",opts:[["spread","The values spread across the full 0 to 255 range, raising contrast"],["dark","All values moved towards 0"],["same","Nothing changed"],["noise","Noise was removed"]]},
+      {id:"bgr",type:"choice",label:"If you skip cv2.cvtColor(img, cv2.COLOR_BGR2RGB) before plt.imshow, a colour photo…",opts:[["swap","shows red and blue swapped"],["gray","appears in grayscale"],["rot","appears rotated"],["same","looks exactly the same"]]}]},
+ exit:{p:"Exit", title:"Exit quiz", exit:true,
+  intro:"Six questions on everything in today's session. Each answer is checked as soon as you press Check answer.",
+  qs:[{id:"q0",type:"choice",label:"Which detector gives the thinnest, most continuous edges?",opts:[["0","Roberts"],["1","Laplacian"],["2","Canny"],["3","Prewitt"]]},
+      {id:"q1",type:"choice",label:"Which mask has a centre row weighted by 2?",opts:[["0","Prewitt"],["1","Sobel"],["2","Roberts"]]},
+      {id:"q2",type:"choice",label:"Erosion with a larger structuring element…",opts:[["0","removes more"],["1","removes less"],["2","has no effect"]]},
+      {id:"q3",type:"choice",label:"Closing is…",opts:[["0","erosion then dilation"],["1","dilation then erosion"],["2","dilation twice"]]},
+      {id:"q4",type:"choice",label:"cv2.imread loads colour channels in which order?",opts:[["0","RGB"],["1","BGR"],["2","HSV"]]},
+      {id:"q5",type:"choice",label:"Histogram equalization mainly improves…",opts:[["0","noise"],["1","contrast"],["2","resolution"]]}]}
+};
+const PARTS=[["14A","t14a"],["14B","t14b"],["14C","t14c"],["15A","t15a"],["15B","t15b"],["Exit","exit"]];
+const STEP_TOTAL={"14A":11,"14B":6,"14C":7,"15A":7,"15B":11};
+const STEP_SUM=Object.values(STEP_TOTAL).reduce((a,b)=>a+b,0);
+const QMAX=PARTS.reduce((a,[,t])=>a+TASKS[t].qs.length,0);
+const ansText=(q,v)=>{ if(v===undefined||v===null||v==="") return ""; if(q.type==="choice"){ const o=q.opts.find(o=>o[0]===String(v)); return o?o[1]:String(v); } const n=Number(String(v).replace(/,/g,"")); return Number.isFinite(n)?n:String(v); };
+const r2=x=>Math.round(x*100)/100;
+const qMarks=a=>a&&a.correct?Math.max(0,1-GR.penalty*(a.n-1)):0;
+const tms=t=>t&&t.toDate?t.toDate().getTime():(typeof t==="number"?t:0);
+const fmt=t=>t?new Date(t).toLocaleString([], {dateStyle:"medium", timeStyle:"short"}):"–";
+
 const main=$("#main");
-if(!cfg.apiKey||String(cfg.apiKey).startsWith("PASTE")){ main.innerHTML=`<div class="card"><h2>Not connected</h2><p>Paste your Firebase web config into <code>config.js</code> first. See SETUP.md.</p></div>`; throw new Error("no config"); }
+const cfg=window.FIREBASE_CONFIG||{};
+if(!cfg.apiKey||String(cfg.apiKey).startsWith("PASTE")){ main.innerHTML=`<div class="card"><h2>Not connected</h2><p>Paste your Firebase web config into <code>config.js</code> first. See DEPLOY.md.</p></div>`; throw new Error("no config"); }
 
 const A=await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`);
 const U=await import(`https://www.gstatic.com/firebasejs/${V}/firebase-auth.js`);
 const D=await import(`https://www.gstatic.com/firebasejs/${V}/firebase-firestore.js`);
-const app=A.initializeApp(cfg); const auth=U.getAuth(app); const db=D.getFirestore(app);
+const app=A.initializeApp(cfg,"dip-dash"); const auth=U.getAuth(app); const db=D.getFirestore(app);
 const provider=new U.GoogleAuthProvider(); provider.setCustomParameters({prompt:"select_account"});
+try{ await U.getRedirectResult(auth); }catch(e){}
 
-let KEY=null, DATA=null, view="students", sortBy="enrollment", sortDir=1, q="";
-const GR=Object.assign({maxAttempts:4, penalty:0.25}, window.GRADING||{});
+let KEY=null, ROWS=[], ATTS=[], TAB="students", SORT={k:"enrollment",dir:1};
 
 U.onAuthStateChanged(auth, async u=>{
-  if(!u){ $("#who").textContent=""; $("#topBtns").innerHTML=""; main.innerHTML=`<div class="card"><h2>Teacher sign-in</h2><p>Only accounts listed as teachers in the Firestore security rules can open this dashboard.</p><button class="btn" id="si">Sign in with Google</button></div>`;
-    $("#si").onclick=()=>U.signInWithPopup(auth,provider).catch(e=>toast(e.code)); return; }
+  if(!u){ $("#who").textContent=""; $("#topBtns").innerHTML="";
+    main.innerHTML=`<div class="card"><h2>Teacher sign-in</h2><p>Sign in with a teacher Google account listed in <code>dipIsTeacher()</code> in the Firestore rules.</p><button class="btn" id="si">Sign in with Google</button></div>`;
+    $("#si").onclick=async()=>{ try{ await U.signInWithPopup(auth,provider); }catch(e){ if(e.code==="auth/popup-blocked") U.signInWithRedirect(auth,provider); else toast(e.code||e.message); } };
+    return; }
   $("#who").textContent=u.email; $("#topBtns").innerHTML=`<button class="btn ghost sm" id="so">Sign out</button>`; $("#so").onclick=()=>U.signOut(auth);
-  main.innerHTML=`<p class="muted">Checking access…</p>`;
-  try{ const k=await D.getDoc(D.doc(db,"config","answerKey")); KEY=k.exists()?k.data():null; }
-  catch(e){ main.innerHTML=`<div class="card"><h2>Not authorised</h2><p>${esc(u.email)} is not a teacher account for this site. Add it to <code>isTeacher()</code> in firestore.rules and publish the rules.</p></div>`; return; }
-  await loadAll(); render();
+  main.innerHTML=`<p class="muted">Loading class data…</p>`;
+  try{ const k=await D.getDoc(D.doc(db,P+"config","answerKey")); KEY=k.exists()?k.data():null; }
+  catch(e){ main.innerHTML=`<div class="card"><h2>Not authorised</h2><p>${esc(u.email)} is not a teacher account for this site, or the DIP rules aren't published in this Firebase project. Add the email to <code>dipIsTeacher()</code> in firestore.rules and Publish.</p><p class="muted">${esc(e.code||e.message)}</p></div>`; return; }
+  try{ await load(); }catch(e){ main.innerHTML=`<div class="card"><h2>Couldn't load data</h2><p class="err">${esc(e.code||e.message)}</p></div>`; }
 });
 
-async function loadAll(){
-  main.innerHTML=`<p class="muted">Loading data…</p>`;
-  const col=async n=>(await D.getDocs(D.collection(db,n))).docs.map(d=>({_id:d.id,...d.data()}));
-  const [users,atts,prog]=await Promise.all(["users","attempts","progress"].map(col));
-  const A={}; atts.forEach(a=>{ ((A[a.uid]=A[a.uid]||{})[a.tid]=A[a.uid][a.tid]||{})[a.qid]=a; });
-  const P={}; prog.forEach(p=>P[p._id]=p);
-  DATA={users, A, P, atts};
+async function load(){
+  const col=async n=>(await D.getDocs(D.collection(db,P+n))).docs.map(d=>({_id:d.id,...d.data()}));
+  const [users,prog,atts]=await Promise.all([col("users"),col("progress"),col("attempts")]);
+  ATTS=atts;
+  const PR={}; prog.forEach(p=>PR[p._id]=p);
+  const AT={}; atts.forEach(a=>{ ((AT[a.uid]=AT[a.uid]||{})[a.tid]=AT[a.uid][a.tid]||{})[a.qid]=a; });
+  ROWS=users.map(u=>{
+    const pr=PR[u.uid]||{}, at=AT[u.uid]||{};
+    const r={uid:u.uid, name:u.name, enrollment:u.enrollment, division:u.division||"", email:u.email, created:tms(u.createdAt), pr, at, marks:{}, total:0, done:0};
+    PARTS.forEach(([p,t])=>{ let s=0, dn=0, started=false; TASKS[t].qs.forEach(q=>{ const a=(at[t]||{})[q.id]; if(a){ started=true; if(a.correct||a.n>=GR.maxAttempts) dn++; } s+=qMarks(a); });
+      r.marks[p]={score:r2(s), max:TASKS[t].qs.length, started, done:dn}; r["m_"+p]=r2(s); r.total+=s; r.done+=dn; });
+    r.total=r2(r.total); r.pct=Math.round(100*r.done/QMAX);
+    r.steps=Object.entries(pr.steps||{}).reduce((a,[k,m])=>a+Object.values(m||{}).filter(Boolean).length,0);
+    r.peeks=Object.values(pr.peeks||{}).filter(Boolean).length;
+    r.checks=Object.values(at).reduce((a,o)=>a+Object.values(o).reduce((b,x)=>b+(x.n||0),0),0);
+    r.last=Math.max(tms(pr.updatedAt), ...Object.values(at).flatMap(o=>Object.values(o).map(x=>tms(x.at))), 0);
+    return r; });
+  render();
 }
 
-/* ---------- grading (from server-verified attempt records) ---------- */
-const qMarks=a=>a&&a.correct?Math.max(0,1-GR.penalty*(a.n-1)):0;
-const r2=x=>Math.round(x*100)/100;
-function gradeTask(tid, at){
-  const k=(KEY&&KEY.tasks&&KEY.tasks[tid])||{}; let score=0, max=0, started=false, done=0; const rows=[];
-  for(const [qid,kq] of Object.entries(k)){
-    const pts=Number(kq.pts||1); max+=pts; const a=(at||{})[qid];
-    if(a){ started=true; if(a.correct||a.n>=GR.maxAttempts) done++; }
-    const got=qMarks(a)*pts; score+=got; rows.push({qid,kq,a,got,pts});
-  }
-  return {score:r2(score), max, rows, started, done, total:rows.length};
+function filtered(){
+  const q=($("#q")?.value||"").toLowerCase(), dv=$("#dv")?.value||"";
+  return ROWS.filter(r=>(!dv||r.division===dv)&&(!q||[r.name,r.enrollment,r.email].join(" ").toLowerCase().includes(q)));
 }
-function studentSummary(u){
-  const at=DATA.A[u.uid]||{}; const prog=(DATA.P[u.uid]||{}).steps||{};
-  const out={u, pr:{}, total:0, max:0, steps:{}, last:null};
-  for(const p of [...PRACS,"exit"]){ const t=p==="exit"?"exit":TASK_OF[p]; const g=gradeTask(t, at[t]); out.pr[p]=g; out.total+=g.score; out.max+=g.max; }
-  out.total=r2(out.total);
-  PRACS.forEach(p=>out.steps[p]=Object.values(prog[p]||{}).filter(Boolean).length);
-  const times=[...Object.values(at).flatMap(o=>Object.values(o).map(a=>a.at)), (DATA.P[u.uid]||{}).updatedAt].filter(t=>t&&t.toDate).map(t=>t.toDate());
-  out.last=times.length?new Date(Math.max(...times)):null;
-  return out;
-}
-const fmt=d=>d?d.toLocaleString([], {dateStyle:"medium", timeStyle:"short"}):"";
 
-/* ---------- render ---------- */
 function render(){
-  const rows=DATA.users.map(studentSummary);
-  const nAns=DATA.atts.length, nOk=DATA.atts.filter(a=>a.correct).length;
-  const avg=rows.length?(rows.reduce((a,r)=>a+r.total,0)/rows.length):0;
-  const complete=rows.filter(r=>Object.values(r.pr).every(g=>g.done===g.total&&g.total>0)).length;
+  const n=ROWS.length, avg=n?Math.round(ROWS.reduce((a,r)=>a+r.total,0)/n/QMAX*100):0;
+  const active=ROWS.filter(r=>r.last>Date.now()-86400000).length;
+  const divs=[...new Set(ROWS.map(r=>r.division).filter(Boolean))].sort();
+  const q=$("#q")?.value||"", dv=$("#dv")?.value||"";
   main.innerHTML=`
-  ${!KEY?`<div class="card" style="border-color:var(--amber); background:var(--amber-soft)"><b>No answer key loaded yet.</b> Students can't check answers until you open the <b>Answer key</b> tab and save <code>answer_key.json</code>.</div>`:""}
-  <div class="cards"><div class="stat"><b>${rows.length}</b><span>registered students</span></div><div class="stat"><b>${nAns}</b><span>questions answered (${nAns?Math.round(nOk/nAns*100):0}% correct)</span></div><div class="stat"><b>${avg.toFixed(1)}</b><span>average total (of ${rows[0]?rows[0].max:"–"})</span></div><div class="stat"><b>${complete}</b><span>finished everything</span></div></div>
-  <div class="tabs" role="tablist">${[["students","Students"],["tasks","By question"],["key","Answer key"],["help","Help"]].map(([k,l])=>`<button role="tab" data-v="${k}" aria-selected="${view===k}">${l}</button>`).join("")}</div>
-  <div id="pane"></div>`;
-  main.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{ view=b.dataset.v; render(); });
-  const pane=$("#pane");
-  if(view==="students") renderStudents(pane, rows);
-  else if(view==="tasks") renderTasks(pane, rows);
-  else if(view==="key") renderKey(pane);
-  else pane.innerHTML=`<div class="card"><h3 style="margin-top:0">How auto-grading works</h3><ul>
-   <li>Each question is checked the moment a student presses <b>Check answer</b>. The database rules compare the answer with the key stored in <code>config/answerKey</code>, which students can't read.</li>
-   <li>A record is accepted as "correct" only if the answer really matches the key, so students can't fake a correct result or write marks.</li>
-   <li>Each question allows ${GR.maxAttempts} attempts. Marks: 1 for correct on the first try, ${GR.penalty} less for each retry, 0 if never correct. A correct answer is final.</li>
-   <li>Numbers are accepted within the tolerance in the key (0.05 = &plusmn;5%).</li>
-   <li>Progress is stored in the database, so students keep their answers and marks after signing out or on another device.</li>
-   <li>If you correct the key after students have answered, press <b>Regrade with current key</b> to re-check every stored answer.</li>
-   <li><b>Reset</b> (in a student's detail view) deletes their attempts on one question or task so they can start it again.</li>
-   <li>Step ticks are self-reported progress, not proof of work.</li></ul></div>`;
+  ${!KEY?`<div class="card" style="border-color:var(--amber); background:var(--amber-soft)"><b>No answer key loaded yet.</b> Students can't check answers until you open the <b>Answer key</b> tab and save <code>answer_key.json</code>. Typed answers are still saved and appear in the Excel export.</div>`:""}
+  <div class="stats"><div><b>${n}</b><span>registered students</span></div><div><b>${avg}%</b><span>average marks</span></div><div><b>${active}</b><span>active in last 24 h</span></div><div><b>${QMAX}</b><span>graded questions (5 practicals + exit quiz)</span></div></div>
+  <div class="tools"><input type="search" id="q" placeholder="Search name, enrollment, email" size="30" value="${esc(q)}">
+    <select id="dv"><option value="">All divisions</option>${divs.map(d=>`<option ${d===dv?"selected":""}>${esc(d)}</option>`).join("")}</select>
+    <button class="btn ghost" id="rl">Reload</button><button class="btn" id="xl">Export Excel</button><button class="btn ghost" id="csv">Export CSV</button><button class="btn ghost" id="rg">Regrade with current key</button></div>
+  <div class="tabs" role="tablist">${[["students","Students"],["tasks","Question difficulty"],["parts","Practical completion"],["key","Answer key"],["help","Help"]].map(([k,l])=>`<button role="tab" data-t="${k}" aria-selected="${TAB===k}">${l}</button>`).join("")}</div>
+  <div id="view"></div>`;
+  $("#q").oninput=draw; $("#dv").onchange=draw;
+  $("#rl").onclick=async()=>{ main.innerHTML=`<p class="muted">Reloading…</p>`; try{ const k=await D.getDoc(D.doc(db,P+"config","answerKey")); KEY=k.exists()?k.data():null; }catch(e){} await load(); };
+  $("#xl").onclick=exportExcel; $("#csv").onclick=exportCsv; $("#rg").onclick=regrade;
+  main.querySelectorAll(".tabs button").forEach(b=>b.onclick=()=>{ TAB=b.dataset.t; render(); });
+  draw();
 }
 
-function renderStudents(pane, rows){
-  const ql=q.toLowerCase();
-  let list=rows.filter(r=>!ql||[r.u.name,r.u.enrollment,r.u.email].join(" ").toLowerCase().includes(ql));
-  const val=r=> sortBy==="enrollment"?r.u.enrollment: sortBy==="name"?r.u.name.toLowerCase(): sortBy==="total"?r.total: sortBy==="last"?(r.last?r.last.getTime():0): (r.pr[sortBy]?r.pr[sortBy].score:0);
-  list.sort((a,b)=>{ const x=val(a), y=val(b); return (x>y?1:x<y?-1:0)*sortDir; });
-  const th=(k,l)=>`<th data-s="${k}">${l}${sortBy===k?(sortDir>0?" &#9650;":" &#9660;"):""}</th>`;
-  const cell=g=>g.started?`<b>${g.score}</b>/${g.max}${g.done<g.total?` <span class="pill warn" title="questions finished">${g.done}/${g.total}</span>`:""}`:`<span class="pill no">&ndash;</span>`;
-  pane.innerHTML=`<div class="row" style="margin-bottom:12px"><input type="search" id="q" placeholder="Search name, enrollment or email" value="${esc(q)}" style="min-width:280px">
-    <button class="btn ghost" id="csv">Download CSV</button><button class="btn ghost" id="rl">Reload</button><button class="btn ghost" id="rg">Regrade with current key</button></div>
-  <div class="wrap"><table><thead><tr>${th("enrollment","Enrollment")}${th("name","Name")}${PRACS.map(p=>th(p,p)).join("")}${th("exit","Exit")}${th("total","Total")}${th("last","Last activity")}</tr></thead>
-  <tbody>${list.map(r=>`<tr data-uid="${esc(r.u.uid)}"><td class="mono">${esc(r.u.enrollment)}</td><td>${esc(r.u.name)}</td>
-    ${PRACS.map(p=>`<td><span class="bar" title="${r.steps[p]} of ${STEP_TOTAL[p]} steps ticked"><i style="width:${Math.min(100,r.steps[p]/STEP_TOTAL[p]*100)}%"></i></span>${cell(r.pr[p])}</td>`).join("")}
-    <td>${cell(r.pr.exit)}</td><td class="n"><b>${r.total}</b>/${r.max}</td><td>${esc(fmt(r.last))}</td></tr>`).join("")||`<tr><td colspan="10" class="muted">No students yet.</td></tr>`}</tbody></table></div>
-  <p class="muted">Green bars: steps ticked. Amber badge: questions finished, when a task is still in progress. Click a row for answers, attempts and resets.</p>`;
-  const qi=$("#q"); qi.oninput=()=>{ q=qi.value; renderStudents(pane, rows); const n=$("#q"); n.focus(); n.setSelectionRange(n.value.length,n.value.length); };
-  pane.querySelectorAll("th[data-s]").forEach(h=>h.onclick=()=>{ const k=h.dataset.s; if(sortBy===k) sortDir*=-1; else { sortBy=k; sortDir=(k==="enrollment"||k==="name")?1:-1; } renderStudents(pane, rows); });
-  pane.querySelectorAll("tbody tr[data-uid]").forEach(tr=>tr.onclick=()=>openStudent(tr.dataset.uid));
-  $("#csv").onclick=()=>csv(rows); $("#rl").onclick=async()=>{ await loadAll(); render(); }; $("#rg").onclick=regrade;
+function draw(){
+  const rows=filtered(), v=$("#view");
+  if(TAB==="students"){
+    const cols=[["name","Name"],["enrollment","Enrollment"],["division","Division"],...PARTS.map(([p,t])=>["m_"+p,`${p} /${TASKS[t].qs.length}`]),["total",`Total /${QMAX}`],["pct","Answered"],["steps",`Steps /${STEP_SUM}`],["checks","Checks"],["peeks","Code peeks"],["last","Last active"]];
+    rows.sort((a,b)=>{ const x=a[SORT.k], y=b[SORT.k]; return (typeof x==="number"?x-y:String(x).localeCompare(String(y),undefined,{numeric:true}))*SORT.dir; });
+    v.innerHTML=`<div class="wrap"><table><thead><tr>${cols.map(([k,l])=>`<th data-k="${k}">${esc(l)}${SORT.k===k?(SORT.dir>0?" ▲":" ▼"):""}</th>`).join("")}</tr></thead><tbody>${rows.map(r=>`<tr>
+      <td><button class="link" data-uid="${esc(r.uid)}">${esc(r.name)}</button><br><span class="sub">${esc(r.email)}</span></td><td class="mono">${esc(r.enrollment)}</td><td>${esc(r.division)}</td>
+      ${PARTS.map(([p])=>{ const m=r.marks[p]; return `<td class="n">${m.started?`<b>${m.score}</b>${m.done<m.max?` <span class="pill warn" title="questions finished">${m.done}/${m.max}</span>`:""}`:`<span class="dimc">–</span>`}</td>`; }).join("")}
+      <td class="n"><b>${r.total}</b></td><td><span class="bar"><i style="width:${r.pct}%"></i></span>${r.pct}%</td>
+      <td class="n">${r.steps}</td><td class="n">${r.checks}</td><td class="n">${r.peeks}</td><td>${fmt(r.last)}</td></tr>`).join("")||`<tr><td colspan="${cols.length}" class="muted">No students yet.</td></tr>`}</tbody></table></div>
+      <p class="muted">Marks come from server-checked answers. Amber badge: questions finished when a task is still in progress. Steps and code peeks are self-reported progress. Click a name for answers, attempts and resets.</p>`;
+    v.querySelectorAll("th[data-k]").forEach(th=>th.onclick=()=>{ const k=th.dataset.k; SORT={k, dir:SORT.k===k?-SORT.dir:(["name","enrollment","division"].includes(k)?1:-1)}; draw(); });
+    v.querySelectorAll("[data-uid]").forEach(b=>b.onclick=()=>detail(b.dataset.uid));
+  } else if(TAB==="tasks"){
+    const uids=new Set(rows.map(r=>r.uid)); const n=rows.length||1;
+    const stat=PARTS.flatMap(([p,t])=>TASKS[t].qs.map((q,i)=>{ const as=ATTS.filter(a=>uids.has(a.uid)&&a.tid===t&&a.qid===q.id); const ok=as.filter(a=>a.correct);
+      return {p,t,q,i,att:as.length,ok:ok.length,first:ok.filter(a=>a.n===1).length,out:as.filter(a=>!a.correct&&a.n>=GR.maxAttempts).length,stuck:as.filter(a=>!a.correct).length,avg:ok.length?ok.reduce((s,a)=>s+a.n,0)/ok.length:0,
+        top:Object.entries(as.filter(a=>!a.correct).reduce((m,a)=>{ const k=ansText(q,a.ans); m[k]=(m[k]||0)+1; return m; },{})).sort((a,b)=>b[1]-a[1]).slice(0,3)}; }));
+    stat.sort((a,b)=>b.stuck-a.stuck||b.out-a.out);
+    v.innerHTML=`<p class="muted">Sorted by students who answered but aren't correct yet. A question where many students give the <b>same</b> "wrong" answer usually means the key value differs on your MATLAB version: fix it in Answer key, then Regrade.</p>
+    <div class="wrap"><table><thead><tr><th>Part</th><th>Question</th><th>Answered</th><th>Correct</th><th>First try</th><th>Not yet correct</th><th>Out of attempts</th><th>Avg attempts to pass</th><th>Most common wrong answers</th><th>Key</th></tr></thead><tbody>${stat.map(s=>{ const k=KEY&&KEY.tasks&&KEY.tasks[s.t]&&KEY.tasks[s.t][s.q.id];
+      return `<tr><td>${s.p}</td><td class="wrapcell" style="max-width:340px">${s.i+1}. ${esc(s.q.label)}</td><td class="n">${s.att}</td><td class="n">${s.ok} (${Math.round(100*s.ok/n)}%)</td><td class="n">${s.first}</td><td class="n">${s.stuck}</td><td class="n">${s.out}</td><td class="n">${s.avg?s.avg.toFixed(1):"–"}</td>
+      <td class="wrapcell">${s.top.map(([a,c])=>`${esc(a)} <span class="dimc">×${c}</span>`).join("<br>")}</td><td class="dimc wrapcell">${k?(k.type==="num"?`${esc(k.value)} ±${Math.round((k.tol||0)*100)}%`:esc(ansText(s.q,k.value))):"–"}</td></tr>`; }).join("")}</tbody></table></div>`;
+  } else if(TAB==="parts"){
+    const n=rows.length;
+    v.innerHTML=`<div class="wrap"><table><thead><tr><th>Part</th><th>Task</th><th>Questions</th><th>Students finished</th><th>Average marks</th><th>Students started the steps</th><th>Average steps ticked</th></tr></thead><tbody>${PARTS.map(([p,t])=>{
+      const T=TASKS[t], ms=rows.map(r=>r.marks[p]); const fin=ms.filter(m=>m.done===m.max).length; const av=n?ms.reduce((a,m)=>a+m.score,0)/n:0;
+      const st=STEP_TOTAL[p]; const ticks=rows.map(r=>Object.values((r.pr.steps||{})[p]||{}).filter(Boolean).length);
+      return `<tr><td>${p}</td><td>${esc(T.title)}</td><td class="n">${T.qs.length}</td><td class="n">${fin} / ${n}</td><td><span class="bar"><i style="width:${T.qs.length?av/T.qs.length*100:0}%"></i></span>${av.toFixed(2)} / ${T.qs.length}</td>
+      <td class="n">${st?ticks.filter(x=>x>0).length+" / "+n:"–"}</td><td class="n">${st&&n?(ticks.reduce((a,b)=>a+b,0)/n).toFixed(1)+" / "+st:"–"}</td></tr>`; }).join("")}</tbody></table></div>`;
+  } else if(TAB==="key"){
+    v.innerHTML=`<div class="card"><p style="margin-top:0">Load <code>answer_key.json</code> from your computer (it is <b>not</b> in the public repository), check it, then save. Only teacher accounts can read or change the saved key. After changing values, press <b>Regrade with current key</b>.</p>
+     <div class="row"><input type="file" id="kf" accept=".json,application/json"><button class="btn" id="ks">Save key to database</button><span id="km"></span></div></div>
+     <textarea id="kt" spellcheck="false">${esc(KEY?JSON.stringify(KEY,null,2):"")}</textarea>`;
+    $("#kf").onchange=async e=>{ const f=e.target.files[0]; if(f) $("#kt").value=await f.text(); };
+    $("#ks").onclick=saveKey;
+  } else {
+    v.innerHTML=`<div class="card"><h3 style="margin-top:0">How it works</h3><ul>
+     <li>Each question is checked when a student presses <b>Check answer</b>. The database rules compare the answer with <code>${P}config/answerKey</code>, which students can't read, so a correct result can't be faked.</li>
+     <li>${GR.maxAttempts} attempts per question. Marks: 1 for correct on the first try, ${GR.penalty} less per retry, 0 if never correct. Correct answers are final.</li>
+     <li>Answers students have <b>typed but not checked</b> (for example while the key was missing or wrong) are saved too, and appear in <b>Export Excel</b>.</li>
+     <li><b>Export Excel</b> gives four sheets: Summary (marks per student), Answers (one row per student, one column per question), Responses (one row per student and question with attempts and result) and Answer key.</li>
+     <li>Students can also download their own responses as Excel from <b>My marks</b> on the site.</li>
+     <li>If you correct the key after students have answered, press <b>Regrade with current key</b>. Students who ran out of attempts on that question can be reset from their detail view.</li>
+     <li>Database layout: <code>${P}users</code> (profile), <code>${P}enrollments</code> (unique enrollment numbers), <code>${P}progress</code> (one per student: steps ticked, code peeks, typed answers), <code>${P}attempts</code> (one per student per question, server-checked), <code>${P}config</code> (answer key).</li></ul></div>`;
+  }
 }
 
-function renderTasks(pane, rows){
-  const tids=[...PRACS.map(p=>TASK_OF[p]),"exit"];
-  pane.innerHTML=tids.map(t=>{ const k=(KEY&&KEY.tasks&&KEY.tasks[t])||{};
-    const qrows=Object.keys(k).map(qid=>{ const as=DATA.atts.filter(a=>a.tid===t&&a.qid===qid); const ok=as.filter(a=>a.correct); const first=ok.filter(a=>a.n===1).length; const avgN=ok.length?(ok.reduce((s,a)=>s+a.n,0)/ok.length).toFixed(1):"–";
-      const out=as.filter(a=>!a.correct&&a.n>=GR.maxAttempts).length;
-      return `<tr><td class="mono">${esc(qid)}</td><td class="n">${as.length}</td><td class="n">${as.length?Math.round(ok.length/as.length*100):0}%</td><td class="n">${first}</td><td class="n">${avgN}</td><td class="n">${out}</td><td class="muted">${esc(k[qid].type==="num"?`${k[qid].value} ±${Math.round((k[qid].tol||0)*100)}%`:k[qid].value)}</td></tr>`; }).join("");
-    return `<h3>${LABELS[t]}</h3><div class="wrap"><table><thead><tr><th>Question</th><th>Answered</th><th>Correct</th><th>Right first try</th><th>Avg attempts when correct</th><th>Out of attempts</th><th>Key</th></tr></thead><tbody>${qrows||`<tr><td colspan="7" class="muted">No key for this task.</td></tr>`}</tbody></table></div>`; }).join("")+
-    `<p class="muted">A question that many students run out of attempts on may have a reference value that differs on your MATLAB version: check the key, then press Regrade.</p>`;
+async function saveKey(){
+  let obj; try{ obj=JSON.parse($("#kt").value); if(!obj.tasks) throw new Error("missing 'tasks'");
+    for(const [t,qs] of Object.entries(obj.tasks)) for(const [qid,k] of Object.entries(qs)){
+      if(!TASKS[t]||!TASKS[t].qs.find(q=>q.id===qid)) throw new Error(`${t}.${qid} isn't a question on the site`);
+      if(k.type==="num"){ if(typeof k.value!=="number"||typeof k.tol!=="number") throw new Error(`${t}.${qid}: num needs numeric value and tol`); }
+      else if(k.type==="choice"){ if(typeof k.value!=="string") throw new Error(`${t}.${qid}: choice value must be text in quotes`); const q=TASKS[t].qs.find(q=>q.id===qid); if(q.opts&&!q.opts.find(o=>o[0]===k.value)) throw new Error(`${t}.${qid}: "${k.value}" isn't one of the options (${q.opts.map(o=>o[0]).join(", ")})`); }
+      else throw new Error(`${t}.${qid}: type must be num or choice`); }
+  }catch(e){ $("#km").innerHTML=`<span class="err">Invalid key: ${esc(e.message)}</span>`; return; }
+  try{ await D.setDoc(D.doc(db,P+"config","answerKey"), obj); KEY=obj; toast("Answer key saved"); render(); }catch(e){ $("#km").innerHTML=`<span class="err">${esc(e.code||e.message)}</span>`; }
 }
-
-function renderKey(pane){
-  pane.innerHTML=`<div class="card"><p style="margin-top:0">Load <code>answer_key.json</code> from your computer (it is <b>not</b> in the public repository), check it, then save. Only teacher accounts can read or change the saved key. After changing values, use <b>Regrade with current key</b> on the Students tab.</p>
-   <div class="row"><input type="file" id="kf" accept=".json,application/json"><button class="btn" id="ks">Save key to database</button><span id="km"></span></div></div>
-   <textarea id="kt" spellcheck="false">${esc(KEY?JSON.stringify(KEY,null,2):"")}</textarea>`;
-  $("#kf").onchange=async e=>{ const f=e.target.files[0]; if(f) $("#kt").value=await f.text(); };
-  $("#ks").onclick=async()=>{ let obj; try{ obj=JSON.parse($("#kt").value); if(!obj.tasks) throw new Error("missing 'tasks'");
-      for(const [t,qs] of Object.entries(obj.tasks)) for(const [qid,k] of Object.entries(qs)){ if(k.type==="num"){ if(typeof k.value!=="number"||typeof k.tol!=="number") throw new Error(`${t}.${qid}: num needs numeric value and tol`); } else if(k.type==="choice"){ if(typeof k.value!=="string") throw new Error(`${t}.${qid}: choice value must be a string`); } else throw new Error(`${t}.${qid}: type must be num or choice`); }
-    }catch(e){ $("#km").innerHTML=`<span class="err">Invalid key: ${esc(e.message)}</span>`; return; }
-    try{ await D.setDoc(D.doc(db,"config","answerKey"), obj); KEY=obj; toast("Answer key saved"); render(); }catch(e){ $("#km").innerHTML=`<span class="err">${esc(e.code||e.message)}</span>`; } };
-}
-
 function isRight(k,a){ if(!k) return false; if(k.type==="num") return typeof a==="number" && Math.abs(a-k.value)<=Math.abs(k.value)*k.tol+1e-9; return typeof a==="string" && a===k.value; }
 async function regrade(){
   if(!KEY){ toast("Load the answer key first"); return; }
-  const changes=DATA.atts.filter(a=>{ const k=(KEY.tasks[a.tid]||{})[a.qid]; return k && isRight(k,a.ans)!==!!a.correct; });
-  if(!changes.length){ toast("All stored answers already match the key"); return; }
-  if(!confirm(`${changes.length} stored answer(s) change result with the current key. Update them?`)) return;
-  try{ for(let i=0;i<changes.length;i+=400){ const b=D.writeBatch(db); changes.slice(i,i+400).forEach(a=>{ const k=KEY.tasks[a.tid][a.qid]; b.update(D.doc(db,"attempts",a._id),{correct:isRight(k,a.ans)}); }); await b.commit(); }
-    toast(`Regraded ${changes.length} answer(s)`); await loadAll(); render(); }catch(e){ toast("Regrade failed: "+(e.code||e.message)); }
+  const ch=ATTS.filter(a=>{ const k=(KEY.tasks[a.tid]||{})[a.qid]; return k && isRight(k,a.ans)!==!!a.correct; });
+  if(!ch.length){ toast("All stored answers already match the key"); return; }
+  if(!confirm(`${ch.length} stored answer(s) change result with the current key. Update them?`)) return;
+  try{ for(let i=0;i<ch.length;i+=400){ const b=D.writeBatch(db); ch.slice(i,i+400).forEach(a=>b.update(D.doc(db,P+"attempts",a._id),{correct:isRight(KEY.tasks[a.tid][a.qid],a.ans)})); await b.commit(); }
+    toast(`Regraded ${ch.length} answer(s)`); await load(); }catch(e){ toast("Regrade failed: "+(e.code||e.message)); }
 }
 
-function openStudent(uid){
-  const u=DATA.users.find(x=>x.uid===uid); const r=studentSummary(u); const at=DATA.A[uid]||{};
-  const tids=[...PRACS.map(p=>TASK_OF[p]),"exit"]; const dlg=$("#dlg");
-  dlg.innerHTML=`<div class="dhead"><div><h2 style="margin:0">${esc(u.name)}</h2><div class="muted">${esc(u.enrollment)} &middot; ${esc(u.email)} &middot; registered ${esc(fmt(u.createdAt&&u.createdAt.toDate?u.createdAt.toDate():null))}</div>
-    <div style="margin-top:4px"><b>Total ${r.total} / ${r.max}</b> &middot; steps ticked: ${PRACS.map(p=>`${p} ${r.steps[p]}/${STEP_TOTAL[p]}`).join(", ")}</div></div><button class="btn ghost sm" id="dc">Close</button></div>
-  <div class="dbody">${tids.map(t=>{ const g=r.pr[t==="exit"?"exit":PRACS.find(p=>TASK_OF[p]===t)];
-    return `<h3>${LABELS[t]} <b>${g.score}/${g.max}</b> ${g.started?`<button class="btn danger sm" data-rt="${t}">Reset task</button>`:`<span class="pill no">not started</span>`}</h3>
-    ${g.started?`<div class="wrap"><table class="ans"><thead><tr><th>Q</th><th>Last answer</th><th>Attempts</th><th>Result</th><th>Marks</th><th>Expected</th><th></th></tr></thead><tbody>${g.rows.map(x=>`<tr><td class="q mono">${esc(x.qid)}</td><td>${x.a?esc(x.a.ans):"<span class='muted'>–</span>"}</td><td class="n">${x.a?x.a.n:0}/${GR.maxAttempts}</td>
-      <td>${!x.a?"":x.a.correct?`<span class="good">&#10003; correct</span>`:(x.a.n>=GR.maxAttempts?`<span class="bad">&#10007; out of attempts</span>`:`<span class="bad">&#10007; trying</span>`)}</td><td class="n">${r2(x.got)}</td>
-      <td class="muted">${x.kq.type==="num"?`${esc(x.kq.value)} &plusmn;${Math.round((x.kq.tol||0)*100)}%`:esc(x.kq.value)}</td><td>${x.a?`<button class="btn ghost sm" data-rq="${t}__${esc(x.qid)}">Reset</button>`:""}</td></tr>`).join("")}</tbody></table></div>`:""}`; }).join("")}
-   <div class="row" style="margin-top:20px"><button class="btn danger" id="rr">Reset registration</button><span class="muted">Deletes name and enrollment so the student can register again. Answers are kept.</span></div></div>`;
-  dlg.showModal();
-  $("#dc").onclick=()=>dlg.close();
-  const del=async ids=>{ const b=D.writeBatch(db); ids.forEach(id=>b.delete(D.doc(db,"attempts",id))); await b.commit(); };
-  dlg.querySelectorAll("[data-rq]").forEach(b=>b.onclick=async()=>{ const [t,qid]=b.dataset.rq.split("__"); if(!confirm(`Reset ${u.name}'s attempts on ${LABELS[t]} question ${qid}?`)) return;
-    try{ await del([`${uid}__${t}__${qid}`]); toast("Question reset"); await loadAll(); render(); openStudent(uid); }catch(e){ toast(e.code||e.message); } });
-  dlg.querySelectorAll("[data-rt]").forEach(b=>b.onclick=async()=>{ const t=b.dataset.rt; if(!confirm(`Reset all of ${u.name}'s attempts on ${LABELS[t]}?`)) return;
-    try{ await del(Object.keys(at[t]||{}).map(qid=>`${uid}__${t}__${qid}`)); toast("Task reset"); await loadAll(); render(); openStudent(uid); }catch(e){ toast(e.code||e.message); } });
-  $("#rr").onclick=async()=>{ if(!confirm(`Reset ${u.name} (${u.enrollment})? They will register again with corrected details. Answers are kept.`)) return;
-    try{ const b=D.writeBatch(db); b.delete(D.doc(db,"users",uid)); b.delete(D.doc(db,"enrollments",u.enrollment)); await b.commit(); toast("Registration reset"); dlg.close(); await loadAll(); render(); }catch(e){ toast(e.code||e.message); } };
+function detail(uid){
+  const r=ROWS.find(x=>x.uid===uid); if(!r) return; const dlg=$("#dlg"); const typed=r.pr.answers||{};
+  dlg.innerHTML=`<div class="dhead"><div><h2 style="margin:0">${esc(r.name)} &middot; ${esc(r.enrollment)}</h2><div class="muted">${esc(r.email)}${r.division?" &middot; "+esc(r.division):""} &middot; registered ${fmt(r.created)}</div>
+    <div style="margin-top:4px"><b>Total ${r.total} / ${QMAX}</b> &middot; ${r.pct}% answered &middot; ${r.steps}/${STEP_SUM} steps ticked &middot; ${r.peeks} code peek${r.peeks===1?"":"s"} &middot; last active ${fmt(r.last)}</div></div><button class="btn ghost sm" id="dc">Close</button></div>
+  <div class="dbody">${PARTS.map(([p,t])=>{ const m=r.marks[p], at=r.at[t]||{}, ty=typed[t]||{}, any=m.started||Object.keys(ty).length;
+    const peeks=Object.keys(r.pr.peeks||{}).filter(k=>k.startsWith(p+".")).map(k=>+k.split(".")[1]+1).sort((a,b)=>a-b);
+    return `<h3>${p}: ${esc(TASKS[t].title)} <b>${m.score}/${m.max}</b> ${m.started?`<button class="btn danger sm" data-rt="${t}">Reset task</button>`:""}</h3>
+    ${peeks.length?`<p class="muted" style="margin:0 0 6px">Opened "Show the code" on steps ${peeks.join(", ")}</p>`:""}
+    ${any?`<div class="wrap"><table class="ans"><thead><tr><th>Q</th><th>Question</th><th>Last checked answer</th><th>Typed, not checked</th><th>Attempts</th><th>Result</th><th>Marks</th><th>Key</th><th></th></tr></thead><tbody>${TASKS[t].qs.map((q,i)=>{ const a=at[q.id], k=KEY&&KEY.tasks&&KEY.tasks[t]&&KEY.tasks[t][q.id];
+      return `<tr><td>${i+1}</td><td class="q">${esc(q.label)}</td><td>${a?esc(ansText(q,a.ans)):"<span class='dimc'>–</span>"}</td><td>${ty[q.id]!==undefined&&!(a&&a.correct)?esc(ansText(q,ty[q.id])):""}</td><td class="n">${a?a.n:0}/${GR.maxAttempts}</td>
+      <td>${!a?"":a.correct?`<span class="good">✓ correct</span>`:(a.n>=GR.maxAttempts?`<span class="bad">✗ out of attempts</span>`:`<span class="bad">✗ trying</span>`)}</td><td class="n">${r2(qMarks(a))}</td>
+      <td class="dimc">${k?(k.type==="num"?`${esc(k.value)} ±${Math.round((k.tol||0)*100)}%`:esc(ansText(q,k.value))):"–"}</td><td>${a?`<button class="btn ghost sm" data-rq="${t}__${esc(q.id)}">Reset</button>`:""}</td></tr>`; }).join("")}</tbody></table></div>`:`<p class="muted">Not started.</p>`}`; }).join("")}
+   <div class="row" style="margin-top:20px"><button class="btn danger" id="rr">Reset registration</button><span class="muted">Deletes name, enrollment and division so the student can register again with corrected details. Answers are kept.</span></div></div>`;
+  dlg.showModal(); $("#dc").onclick=()=>dlg.close();
+  const del=async ids=>{ const b=D.writeBatch(db); ids.forEach(id=>b.delete(D.doc(db,P+"attempts",id))); await b.commit(); };
+  dlg.querySelectorAll("[data-rq]").forEach(b=>b.onclick=async()=>{ const [t,qid]=b.dataset.rq.split("__"); if(!confirm(`Reset ${r.name}'s attempts on this question?`)) return;
+    try{ await del([`${uid}__${t}__${qid}`]); toast("Question reset"); await load(); detail(uid); }catch(e){ toast(e.code||e.message); } });
+  dlg.querySelectorAll("[data-rt]").forEach(b=>b.onclick=async()=>{ const t=b.dataset.rt; if(!confirm(`Reset all of ${r.name}'s attempts on ${t}?`)) return;
+    try{ await del(Object.keys(r.at[t]||{}).map(qid=>`${uid}__${t}__${qid}`)); toast("Task reset"); await load(); detail(uid); }catch(e){ toast(e.code||e.message); } });
+  $("#rr").onclick=async()=>{ if(!confirm(`Reset ${r.name} (${r.enrollment})? They will register again. Answers are kept.`)) return;
+    try{ const b=D.writeBatch(db); b.delete(D.doc(db,P+"users",uid)); b.delete(D.doc(db,P+"enrollments",r.enrollment)); await b.commit(); toast("Registration reset"); dlg.close(); await load(); }catch(e){ toast(e.code||e.message); } };
 }
 
-function csv(rows){
-  const head=["Enrollment","Name","Email",...PRACS.flatMap(p=>[`${p} steps`,`${p} marks`,`${p} max`]),"Exit marks","Exit max","Total","Max","Last activity"];
-  const cell=v=>{ let s=String(v??""); if(/^[=+\-@]/.test(s)) s="'"+s; return `"${s.replace(/"/g,'""')}"`; };
-  const lines=[head.map(cell).join(",")].concat(rows.map(r=>[r.u.enrollment,r.u.name,r.u.email,...PRACS.flatMap(p=>[r.steps[p],r.pr[p].score,r.pr[p].max]),r.pr.exit.score,r.pr.exit.max,r.total,r.max,fmt(r.last)].map(cell).join(",")));
-  const blob=new Blob(["\ufeff"+lines.join("\n")],{type:"text/csv"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`dip_14_15_marks_${new Date().toISOString().slice(0,10)}.csv`; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+/* ---------- exports ---------- */
+function latestAnswer(r,t,q){ const a=(r.at[t]||{})[q.id], ty=((r.pr.answers||{})[t]||{})[q.id];
+  if(ty!==undefined && String(ty)!=="" && !(a&&a.correct)) return {v:ty, checked:a&&String(a.ans)===String(ty)};
+  return {v:a?a.ans:"", checked:!!a}; }
+function loadXLSX(){ if(window.XLSX) return Promise.resolve(window.XLSX);
+  return new Promise((res,rej)=>{ const s=document.createElement("script"); s.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"; s.onload=()=>res(window.XLSX); s.onerror=()=>rej(new Error("Couldn't load the Excel library")); document.head.appendChild(s); }); }
+const cellSafe=v=>{ if(typeof v!=="string") return v; return /^[=+\-@]/.test(v)?"'"+v:v; };
+function summaryRows(rows){
+  return [["Name","Enrollment","Division","Email",...PARTS.map(([p,t])=>`${p} (/${TASKS[t].qs.length})`),`Total (/${QMAX})`,"Answered %","Steps ticked","Checks","Code peeks","Last active"],
+    ...rows.map(r=>[r.name,r.enrollment,r.division,r.email,...PARTS.map(([p])=>r.marks[p].score),r.total,r.pct,r.steps,r.checks,r.peeks,r.last?new Date(r.last).toLocaleString():""])]; }
+async function exportExcel(){
+  let X; try{ X=await loadXLSX(); }catch(e){ toast(e.message); return; }
+  const rows=filtered().sort((a,b)=>String(a.enrollment).localeCompare(String(b.enrollment),undefined,{numeric:true}));
+  const qcols=PARTS.flatMap(([p,t])=>TASKS[t].qs.map((q,i)=>({p,t,q,i})));
+  const wide=[["Name","Enrollment","Division",...qcols.map(c=>`${c.p} Q${c.i+1}: ${c.q.label}`)],
+    ...rows.map(r=>[r.name,r.enrollment,r.division,...qcols.map(c=>{ const la=latestAnswer(r,c.t,c.q); return ansText(c.q,la.v); })])];
+  const long=[["Name","Enrollment","Division","Part","Q no.","Question","Latest answer","Status","Attempts","Result","Marks","Key"]];
+  rows.forEach(r=>qcols.forEach(c=>{ const a=(r.at[c.t]||{})[c.q.id], la=latestAnswer(r,c.t,c.q), k=KEY&&KEY.tasks&&KEY.tasks[c.t]&&KEY.tasks[c.t][c.q.id];
+    long.push([r.name,r.enrollment,r.division,c.p,c.i+1,c.q.label,ansText(c.q,la.v),la.v===""?"":(la.checked?"checked":"typed, not checked"),a?a.n:0,a?(a.correct?"correct":(a.n>=GR.maxAttempts?"incorrect, no attempts left":"incorrect")):"",r2(qMarks(a)),k?(k.type==="num"?`${k.value} ±${Math.round((k.tol||0)*100)}%`:ansText(c.q,k.value)):""]); }));
+  const keyRows=[["Part","Q no.","Question","Type","Answer","Tolerance"],...qcols.map(c=>{ const k=KEY&&KEY.tasks&&KEY.tasks[c.t]&&KEY.tasks[c.t][c.q.id]; return [c.p,c.i+1,c.q.label,k?k.type:"",k?(k.type==="num"?k.value:ansText(c.q,k.value)):"",k&&k.type==="num"?k.tol:""]; })];
+  const wb=X.utils.book_new(); const add=(name,aoa,w)=>{ const ws=X.utils.aoa_to_sheet(aoa.map(r=>r.map(cellSafe))); if(w) ws["!cols"]=w.map(x=>({wch:x})); X.utils.book_append_sheet(wb,ws,name); };
+  add("Summary",summaryRows(rows),[24,16,18,30,8,8,8,8,8,8,10,10,10,8,10,20]);
+  add("Answers",wide,[24,16,18,...qcols.map(()=>16)]);
+  add("Responses",long,[24,16,18,6,6,60,20,18,9,26,7,16]);
+  add("Answer key",keyRows,[6,6,70,8,26,10]);
+  X.writeFile(wb,`DIP_14_15_class_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+function exportCsv(){
+  const lines=summaryRows(filtered());
+  const csv=lines.map(l=>l.map(x=>{ let s=String(cellSafe(x??"")); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; }).join(",")).join("\n");
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob(["﻿"+csv],{type:"text/csv"})); a.download=`DIP_14_15_marks_${new Date().toISOString().slice(0,10)}.csv`; a.click();
 }
 </script>
 </body>

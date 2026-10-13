@@ -1,5 +1,5 @@
 # DIP Practicals 14A-15B
 
-Interactive session for Digital Image Processing practicals 14A (edge detection), 14B (erosion), 14C (dilation), 15A (opening and closing) and 15B (OpenCV basics).
+Interactive session for Digital Image Processing practicals: 14A edge detection (edge.jpeg), 14B erosion (d1.jpeg), 14C dilation (cameraman.jpeg), 15A opening (d1.jpeg) and 15B OpenCV basics (house.png).
 
-Students learn the theory and try concepts in the browser, then write and run the programs in MATLAB or Python. Extra tasks and the exit quiz are auto-graded after Google sign-in.
+Students learn the theory and try it in the browser, write the programs step by step in MATLAB or Python, then answer auto-graded questions after Google sign-in.
