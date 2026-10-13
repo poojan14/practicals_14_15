@@ -5,12 +5,12 @@
      Firestore rules. GitHub may still show a "secret detected" alert; close it as "False positive".
 */
 window.FIREBASE_CONFIG = {
-  apiKey: "PASTE_API_KEY",
-  authDomain: "PASTE_PROJECT_ID.firebaseapp.com",
-  projectId: "PASTE_PROJECT_ID",
-  storageBucket: "PASTE_PROJECT_ID.firebasestorage.app",
-  messagingSenderId: "PASTE_SENDER_ID",
-  appId: "PASTE_APP_ID"
+    apiKey: "AIzaSyAqQCbdJkVPals-C9uNjLSZ06zIqwycq8s",
+  authDomain: "dip1415.firebaseapp.com",
+  projectId: "dip1415",
+  storageBucket: "dip1415.firebasestorage.app",
+  messagingSenderId: "727900792208",
+  appId: "1:727900792208:web:2e0c90ed2766f9e1a1bf15"
 };
 
 /* All database collections for this site start with this prefix (dip_users, dip_attempts, ...),
