@@ -16,5 +16,8 @@ window.FIREBASE_CONFIG = {
 window.GRADING = { maxAttempts: 4, penalty: 0.25 };
 /* Grading policy. Keep maxAttempts equal to MAX_ATTEMPTS in firestore.rules. */
 window.GRADING = { maxAttempts: 4, penalty: 0.25 };
+window.COLLECTION_PREFIX = "dip_";
+window.DIVISIONS = ["MTech DSML Sem 1"];
+window.GRADING = { maxAttempts: 4, penalty: 0.25 };
 
 
